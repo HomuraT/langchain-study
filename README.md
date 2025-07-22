@@ -14,9 +14,6 @@
 ```bash
 # 使用 pip 安装 uv
 pip install uv
-
-# 或者使用 curl 安装（推荐）
-curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 ### 2. 克隆项目并安装依赖
