@@ -32,6 +32,7 @@ from .test_streaming import TestStreamingChat
 from .test_async_operations import TestAsyncChat
 from .test_error_handling import TestErrorHandling
 from .test_advanced_features import TestAdvancedFeatures
+from .test_tool_calling import TestToolCalling
 
 # 条件导入集成测试（如果可用）
 try:
@@ -45,7 +46,8 @@ __all__ = [
     "TestStreamingChat", 
     "TestAsyncChat",
     "TestErrorHandling",
-    "TestAdvancedFeatures"
+    "TestAdvancedFeatures",
+    "TestToolCalling"
 ]
 
 if INTEGRATION_TESTS_AVAILABLE:
