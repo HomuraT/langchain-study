@@ -12,3 +12,4 @@ wheels/
 .idea
 
 __pycache__/
+.vscode

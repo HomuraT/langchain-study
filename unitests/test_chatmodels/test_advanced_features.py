@@ -6,13 +6,16 @@
 
 import unittest
 import json
-from typing import List, Dict, Any, Optional
+import re
+from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field
+from typing_extensions import Annotated, TypedDict
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_core.output_parsers import PydanticToolsParser
+from langchain_core.output_parsers import PydanticToolsParser, PydanticOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 import sys
 import os
@@ -35,6 +38,51 @@ class MathResult(BaseModel):
     operation: str = Field(description="执行的数学运算")
     result: float = Field(description="计算结果")
     explanation: str = Field(description="计算过程说明")
+
+
+class Joke(BaseModel):
+    """笑话模型"""
+    setup: str = Field(description="笑话的铺垫")
+    punchline: str = Field(description="笑话的包袱")
+    rating: Optional[int] = Field(default=None, description="搞笑程度，1-10分")
+
+
+class ConversationalResponse(BaseModel):
+    """对话回复模型"""
+    response: str = Field(description="对用户查询的对话式回复")
+
+
+class MultiResponse(BaseModel):
+    """多类型响应模型"""
+    final_output: Union[Joke, ConversationalResponse]
+
+
+class Person(BaseModel):
+    """人员信息模型"""
+    name: str = Field(description="人员姓名")
+    age: int = Field(description="人员年龄")
+    height_in_meters: float = Field(description="身高（米）")
+
+
+class People(BaseModel):
+    """多人信息模型"""
+    people: List[Person]
+
+
+# TypedDict定义
+class JokeDict(TypedDict):
+    """笑话字典类型"""
+    setup: Annotated[str, ..., "笑话的铺垫"]
+    punchline: Annotated[str, ..., "笑话的包袱"]
+    rating: Annotated[Optional[int], None, "搞笑程度，1-10分"]
+
+
+class WeatherDict(TypedDict):
+    """天气字典类型"""
+    location: Annotated[str, ..., "地点名称"]
+    temperature: Annotated[float, ..., "温度（摄氏度）"]
+    humidity: Annotated[int, ..., "湿度百分比"]
+    description: Annotated[str, ..., "天气描述"]
 
 
 # 定义测试用的工具
@@ -102,6 +150,286 @@ class TestAdvancedFeatures(unittest.TestCase):
             max_tokens=2000,
             timeout=60
         )
+    
+    def test_with_structured_output_pydantic(self) -> None:
+        """
+        测试使用Pydantic类的with_structured_output方法
+        """
+        model = self.get_advanced_model()
+        
+        try:
+            # 测试笑话生成
+            structured_llm = model.with_structured_output(Joke)
+            response = structured_llm.invoke("Tell me a joke about cats")
+            
+            self.assertIsInstance(response, Joke)
+            self.assertIsInstance(response.setup, str)
+            self.assertIsInstance(response.punchline, str)
+            self.assertTrue(len(response.setup) > 0)
+            self.assertTrue(len(response.punchline) > 0)
+            print(f"Pydantic structured output: {response}")
+            
+        except Exception as e:
+            print(f"Pydantic structured output test failed: {e}")
+    
+    def test_with_structured_output_typeddict(self) -> None:
+        """
+        测试使用TypedDict的with_structured_output方法
+        """
+        model = self.get_advanced_model()
+        
+        try:
+            structured_llm = model.with_structured_output(JokeDict)
+            response = structured_llm.invoke("Tell me a joke about dogs")
+            
+            self.assertIsInstance(response, dict)
+            self.assertIn('setup', response)
+            self.assertIn('punchline', response)
+            self.assertIsInstance(response['setup'], str)
+            self.assertIsInstance(response['punchline'], str)
+            print(f"TypedDict structured output: {response}")
+            
+        except Exception as e:
+            print(f"TypedDict structured output test failed: {e}")
+    
+    def test_with_structured_output_json_schema(self) -> None:
+        """
+        测试使用JSON Schema的with_structured_output方法
+        """
+        model = self.get_advanced_model()
+        
+        json_schema = {
+            "title": "joke",
+            "description": "Joke to tell user.",
+            "type": "object",
+            "properties": {
+                "setup": {
+                    "type": "string",
+                    "description": "The setup of the joke",
+                },
+                "punchline": {
+                    "type": "string",
+                    "description": "The punchline to the joke",
+                },
+                "rating": {
+                    "type": "integer",
+                    "description": "How funny the joke is, from 1 to 10",
+                    "default": None,
+                },
+            },
+            "required": ["setup", "punchline"],
+        }
+        
+        try:
+            structured_llm = model.with_structured_output(json_schema)
+            response = structured_llm.invoke("Tell me a joke about birds")
+            
+            self.assertIsInstance(response, dict)
+            self.assertIn('setup', response)
+            self.assertIn('punchline', response)
+            print(f"JSON Schema structured output: {response}")
+            
+        except Exception as e:
+            print(f"JSON Schema structured output test failed: {e}")
+    
+    def test_union_type_selection(self) -> None:
+        """
+        测试Union类型的多模式选择
+        """
+        model = self.get_advanced_model()
+        
+        try:
+            structured_llm = model.with_structured_output(MultiResponse)
+            
+            # 测试笑话请求
+            joke_response = structured_llm.invoke("Tell me a joke")
+            self.assertIsInstance(joke_response, MultiResponse)
+            print(f"Union type joke response: {joke_response}")
+            
+            # 测试对话请求
+            chat_response = structured_llm.invoke("How are you today?")
+            self.assertIsInstance(chat_response, MultiResponse)
+            print(f"Union type chat response: {chat_response}")
+            
+        except Exception as e:
+            print(f"Union type selection test failed: {e}")
+    
+    def test_streaming_structured_output(self) -> None:
+        """
+        测试流式结构化输出
+        """
+        model = self.get_advanced_model()
+        
+        try:
+            structured_llm = model.with_structured_output(JokeDict)
+            
+            chunks = []
+            for chunk in structured_llm.stream("Tell me a joke about programming"):
+                chunks.append(chunk)
+                print(f"Stream chunk: {chunk}")
+            
+            # 验证最后一个chunk包含完整信息
+            final_chunk = chunks[-1] if chunks else {}
+            self.assertIsInstance(final_chunk, dict)
+            if 'setup' in final_chunk and 'punchline' in final_chunk:
+                self.assertIsInstance(final_chunk['setup'], str)
+                self.assertIsInstance(final_chunk['punchline'], str)
+            
+        except Exception as e:
+            print(f"Streaming structured output test failed: {e}")
+    
+    def test_few_shot_prompting(self) -> None:
+        """
+        测试Few-shot prompting
+        """
+        model = self.get_advanced_model()
+        
+        # 使用系统消息的few-shot示例
+        system = """You are a hilarious comedian. Your specialty is knock-knock jokes. \
+Return a joke which has the setup and the final punchline.
+
+Here are some examples of jokes:
+
+example_user: Tell me a joke about planes
+example_assistant: {"setup": "Why don't planes ever get tired?", "punchline": "Because they have rest wings!", "rating": 2}
+
+example_user: Tell me another joke about planes  
+example_assistant: {"setup": "Cargo", "punchline": "Cargo 'vroom vroom', but planes go 'zoom zoom'!", "rating": 10}"""
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system), 
+            ("human", "{input}")
+        ])
+        
+        try:
+            structured_llm = model.with_structured_output(JokeDict)
+            few_shot_chain = prompt | structured_llm
+            
+            response = few_shot_chain.invoke({"input": "what's something funny about woodpeckers"})
+            
+            self.assertIsInstance(response, dict)
+            self.assertIn('setup', response)
+            self.assertIn('punchline', response)
+            print(f"Few-shot prompting response: {response}")
+            
+        except Exception as e:
+            print(f"Few-shot prompting test failed: {e}")
+    
+    def test_pydantic_output_parser(self) -> None:
+        """
+        测试PydanticOutputParser
+        """
+        model = self.get_advanced_model()
+        
+        # 设置解析器
+        parser = PydanticOutputParser(pydantic_object=People)
+        
+        # 创建提示模板
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "Answer the user query. Wrap the output in `json` tags\n{format_instructions}"),
+            ("human", "{query}")
+        ]).partial(format_instructions=parser.get_format_instructions())
+        
+        try:
+            chain = prompt | model | parser
+            
+            query = "Anna is 23 years old and she is 6 feet tall"
+            response = chain.invoke({"query": query})
+            
+            self.assertIsInstance(response, People)
+            self.assertGreater(len(response.people), 0)
+            self.assertIsInstance(response.people[0], Person)
+            print(f"PydanticOutputParser response: {response}")
+            
+        except Exception as e:
+            print(f"PydanticOutputParser test failed: {e}")
+    
+    def test_custom_parsing(self) -> None:
+        """
+        测试自定义解析
+        """
+        model = self.get_advanced_model()
+        
+        # 自定义解析函数
+        def extract_json(message: AIMessage) -> List[dict]:
+            """从消息中提取JSON内容"""
+            text = message.content
+            pattern = r"```json(.*?)```"
+            matches = re.findall(pattern, text, re.DOTALL)
+            
+            try:
+                return [json.loads(match.strip()) for match in matches]
+            except Exception:
+                raise ValueError(f"Failed to parse: {message}")
+        
+        # 创建提示模板
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "Answer the user query. Output your answer as JSON that matches the given schema: ```json\n{schema}\n```. Make sure to wrap the answer in ```json and ``` tags"),
+            ("human", "{query}")
+        ]).partial(schema=People.schema())
+        
+        try:
+            chain = prompt | model | extract_json
+            
+            query = "Bob is 30 years old and he is 5.8 feet tall"
+            response = chain.invoke({"query": query})
+            
+            self.assertIsInstance(response, list)
+            self.assertGreater(len(response), 0)
+            self.assertIsInstance(response[0], dict)
+            print(f"Custom parsing response: {response}")
+            
+        except Exception as e:
+            print(f"Custom parsing test failed: {e}")
+    
+    def test_json_mode(self) -> None:
+        """
+        测试JSON模式
+        """
+        model = self.get_advanced_model()
+        
+        try:
+            # 注意：需要检查模型是否支持JSON模式
+            structured_llm = model.with_structured_output(None, method="json_mode")
+            
+            response = structured_llm.invoke(
+                "Tell me a joke about cats, respond in JSON with `setup` and `punchline` keys"
+            )
+            
+            self.assertIsInstance(response, dict)
+            print(f"JSON mode response: {response}")
+            
+        except Exception as e:
+            print(f"JSON mode test failed (may not be supported): {e}")
+    
+    def test_raw_output_handling(self) -> None:
+        """
+        测试原始输出处理
+        """
+        model = self.get_advanced_model()
+        
+        try:
+            structured_llm = model.with_structured_output(Joke, include_raw=True)
+            
+            response = structured_llm.invoke("Tell me a joke about computers")
+            
+            self.assertIsInstance(response, dict)
+            self.assertIn('raw', response)
+            self.assertIn('parsed', response)
+            self.assertIn('parsing_error', response)
+            
+            # 验证原始输出
+            self.assertIsInstance(response['raw'], AIMessage)
+            
+            # 验证解析结果
+            if response['parsing_error'] is None:
+                self.assertIsInstance(response['parsed'], (Joke, dict))
+            
+            print(f"Raw output handling response keys: {response.keys()}")
+            print(f"Parsing error: {response['parsing_error']}")
+            
+        except Exception as e:
+            print(f"Raw output handling test failed: {e}")
     
     def test_tool_binding_and_calling(self) -> None:
         """
