@@ -26,32 +26,27 @@
 17. **高级验证和转换** - 复杂验证逻辑
 18. **错误处理** - 验证错误的处理
 
-### 🚀 高级构造测试 (`test_advanced_construction.py`)
-包含10个测试方法，覆盖高级构造模式：
-
-1. **性能优化构造** - 优化配置和缓存策略
-2. **元编程模型** - 动态模型创建和工厂模式
-3. **装饰器模式** - 模型方法装饰器
-4. **中间件模式** - 模型操作中间件
-5. **异步支持** - 异步方法和批处理
-6. **复杂验证逻辑** - 业务规则验证
-7. **数据库集成** - 与SQLite的集成
-8. **高级序列化** - 自定义序列化逻辑
-9. **版本控制模型** - 模型版本管理
-10. **性能对比** - 不同构造方式的性能测试
-
 ### 🌟 LangChain集成测试 (`test_langchain_integration.py`)
-包含9个测试方法，展示Pydantic与LangChain的集成应用：
+包含10个测试方法，展示Pydantic与LangChain的集成应用：
 
 1. **结构化数据提取** - 从非结构化文本中提取用户信息
 2. **响应格式化** - 将AI响应包装成结构化格式
 3. **智能文本分类** - 使用枚举模型进行内容分类
 4. **条件验证** - 根据任务类型进行智能验证
-5. **嵌套数据处理** - 处理复杂多层嵌套结构
+5. **复杂嵌套数据处理** - 处理复杂多层嵌套结构
 6. **简化嵌套处理** - 轻量级嵌套结构验证
 7. **中等复杂度嵌套** - 平衡复杂度的嵌套处理
 8. **智能表单填写** - 根据描述自动填写表单
 9. **错误处理和回退** - 异常处理和降级策略
+10. **动态模型创建** - 运行时根据需求创建Pydantic模型
+
+### 🚀 测试运行器 (`run_all_tests.py`)
+提供全自动化的测试运行功能：
+
+- **批量测试执行** - 支持运行所有测试或指定类别
+- **详细测试报告** - 提供成功率、运行时间等统计信息
+- **命令行接口** - 支持多种运行模式和选项
+- **错误分析** - 提供失败测试的详细错误信息
 
 ## 🚀 快速开始
 
@@ -68,20 +63,36 @@ uv add langchain-openai langchain-core
 ### 运行所有测试
 
 ```bash
+# 使用测试运行器运行所有测试
+python unitests/test_pydantic_base_model/run_all_tests.py
+
 # 运行基础构造测试
 python -m unittest unitests.test_pydantic_base_model.test_basemodel_construction -v
 
-# 运行高级构造测试
-python -m unittest unitests.test_pydantic_base_model.test_advanced_construction -v
-
-# 运行LangChain集成测试
+# 运行LangChain集成测试  
 python -m unittest unitests.test_pydantic_base_model.test_langchain_integration -v
+```
+
+### 使用测试运行器
+
+```bash
+# 运行所有测试
+python unitests/test_pydantic_base_model/run_all_tests.py --tests all
+
+# 只运行基础测试
+python unitests/test_pydantic_base_model/run_all_tests.py --tests basic
+
+# 静默模式（只显示摘要）
+python unitests/test_pydantic_base_model/run_all_tests.py --quiet
+
+# 列出所有可用测试
+python unitests/test_pydantic_base_model/run_all_tests.py --list
 ```
 
 ### 运行特定测试
 
 ```bash
-# 只运行基础模型创建测试
+# 只运行基本模型创建测试
 python -m unittest unitests.test_pydantic_base_model.test_basemodel_construction.TestPydanticBaseModelConstruction.test_basic_model_creation -v
 
 # 只运行LangChain结构化数据提取测试
@@ -134,35 +145,18 @@ UserModel = create_model(
 )
 ```
 
-### 高级构造方式示例
-
-#### 1. 性能优化
+#### 5. 工厂方法模式
 ```python
-class OptimizedModel(BaseModel):
-    model_config = ConfigDict(
-        validate_assignment=False,
-        use_enum_values=True,
-        arbitrary_types_allowed=True
-    )
-```
-
-#### 2. 异步支持
-```python
-class AsyncModel(BaseModel):
-    name: str
-    
-    async def fetch_data(self) -> Dict[str, Any]:
-        await asyncio.sleep(0.1)
-        return {"data": f"async_data_for_{self.name}"}
-```
-
-#### 3. 中间件模式
-```python
-class MiddlewareModel(BaseModel):
-    def __init__(self, **data):
-        super().__init__(**data)
-        self._middleware = ModelMiddleware()
-        self._middleware.add_middleware(LoggingMiddleware())
+class UserFactory:
+    @staticmethod
+    def create_user_for_role(role: str):
+        if role == "admin":
+            return create_model(
+                'AdminUser',
+                name=(str, ...),
+                permissions=(List[str], Field(default_factory=list))
+            )
+        # ... 其他角色
 ```
 
 ### LangChain集成示例
@@ -191,6 +185,23 @@ class TextClassification(BaseModel):
     reasoning: str
 
 structured_llm = chat_model.with_structured_output(TextClassification)
+```
+
+#### 3. 动态模型创建与AI集成
+```python
+def create_model_from_requirements(requirements: Dict[str, Any]) -> type:
+    """根据需求字典动态创建Pydantic模型"""
+    model_fields = {}
+    for field_name, field_def in requirements.items():
+        field_type = field_def.get("type", str)
+        field_desc = field_def.get("description", f"{field_name}字段")
+        model_fields[field_name] = (field_type, Field(description=field_desc))
+    
+    return create_model("DynamicModel", **model_fields)
+
+# 与LangChain集成使用
+DynamicModel = create_model_from_requirements(user_requirements)
+structured_llm = chat_model.with_structured_output(DynamicModel)
 ```
 
 ## ⚠️ 重要技术提示：Function Calling vs Structured Output
@@ -322,9 +333,10 @@ structured_llm = chat_model.with_structured_output(
 
 | 测试场景 | 默认模式 | Function Calling | 提升 |
 |---------|----------|------------------|------|
-| 简单结构提取 | 7.4秒 | 5.2秒 | 30% |
-| 复杂嵌套处理 | ❌ 超时 | 2.7秒 | ∞ |
-| 响应格式化 | ❌ Schema错误 | 2.4秒 | ∞ |
+| 简单结构提取 | 1.2秒 | 0.9秒 | 25% |
+| 复杂嵌套处理 | ❌ Schema错误 | 2.1秒 | ∞ |
+| 响应格式化 | ❌ Schema错误 | 1.8秒 | ∞ |
+| 动态模型创建 | ❌ 不支持 | 2.3秒 | ∞ |
 
 ## 🔧 故障排除
 
@@ -349,9 +361,26 @@ structured_llm = chat_model.with_structured_output(
    ```
    **解决**：优化提示词，明确字段映射关系
 
+4. **API配置错误**
+   ```
+   Error: Invalid API key or base URL
+   ```
+   **解决**：检查`src/config/api.py`中的API配置
+
+## 🏗️ 项目结构
+
+```
+unitests/test_pydantic_base_model/
+├── README.md                      # 项目说明文档
+├── run_all_tests.py               # 主测试运行器
+├── test_basemodel_construction.py # 基础构造测试（18个测试）
+└── test_langchain_integration.py  # LangChain集成测试（10个测试）
+```
+
 ## 📚 参考资源
 
 - [Pydantic官方文档](https://docs.pydantic.dev/)
 - [Pydantic 2.x迁移指南](https://docs.pydantic.dev/2.11/migration/)
 - [OpenAI Structured Outputs官方文档](https://platform.openai.com/docs/guides/structured-outputs)
 - [LangChain with_structured_output指南](https://python.langchain.com/docs/how_to/structured_output/)
+- [Python Type Hints详解](https://docs.python.org/3/library/typing.html)
