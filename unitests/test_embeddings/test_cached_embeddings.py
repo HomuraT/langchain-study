@@ -21,7 +21,7 @@ import sys
 from typing import List, Dict, Any
 
 # 添加项目路径
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from langchain.embeddings import CacheBackedEmbeddings
 from langchain.storage import LocalFileStore, InMemoryByteStore

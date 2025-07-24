@@ -29,6 +29,7 @@ dependencies = [
     "faiss-cpu>=1.11.0.post1",
     "nltk>=3.9.1",
     "defusedxml>=0.7.1",
+    "langchain-chroma>=0.2.5",
 ]
 
 [[tool.uv.index]]

@@ -20,7 +20,7 @@ from typing import List, Dict, Any
 import math
 
 # 添加项目路径
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document

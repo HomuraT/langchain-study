@@ -21,6 +21,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
 # 导入测试模块
 from test_basic_embeddings import TestBasicEmbeddings, TestEmbeddingModels
 from test_cached_embeddings import TestCachedEmbeddings, TestEmbeddingPerformance
+from test_vector_stores import TestVectorStores, TestAsyncVectorStores, TestDocumentLoaderAndSplitter
 
 
 def create_test_suite() -> unittest.TestSuite:
@@ -42,6 +43,11 @@ def create_test_suite() -> unittest.TestSuite:
     # 添加缓存嵌入测试
     suite.addTest(unittest.makeSuite(TestCachedEmbeddings))
     suite.addTest(unittest.makeSuite(TestEmbeddingPerformance))
+    
+    # 添加向量存储测试
+    suite.addTest(unittest.makeSuite(TestVectorStores))
+    suite.addTest(unittest.makeSuite(TestAsyncVectorStores))
+    suite.addTest(unittest.makeSuite(TestDocumentLoaderAndSplitter))
     
     return suite
 
@@ -125,6 +131,32 @@ def run_cache_tests() -> None:
         print(f"错误: {len(result.errors)} 个")
 
 
+def run_vector_store_tests() -> None:
+    """
+    只运行向量存储测试
+    
+    Args:
+        None
+        
+    Returns:
+        None
+    """
+    print("=== 运行向量存储测试 ===")
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(TestVectorStores))
+    suite.addTest(unittest.makeSuite(TestAsyncVectorStores))
+    suite.addTest(unittest.makeSuite(TestDocumentLoaderAndSplitter))
+    
+    runner = unittest.TextTestRunner(verbosity=2)
+    result = runner.run(suite)
+    
+    print(f"\n测试结果: 运行 {result.testsRun} 个测试")
+    if result.failures:
+        print(f"失败: {len(result.failures)} 个")
+    if result.errors:
+        print(f"错误: {len(result.errors)} 个")
+
+
 def run_all_tests() -> None:
     """
     运行所有嵌入测试
@@ -175,6 +207,8 @@ def main() -> None:
             run_basic_tests()
         elif arg == "cache":
             run_cache_tests()
+        elif arg == "vector":
+            run_vector_store_tests()
         elif arg == "all":
             run_all_tests()
         else:
@@ -212,6 +246,7 @@ def print_usage() -> None:
     print("python run_tests.py all               # 运行所有测试")
     print("python run_tests.py basic             # 只运行基础嵌入测试")
     print("python run_tests.py cache             # 只运行缓存嵌入测试")
+    print("python run_tests.py vector            # 只运行向量存储测试")
     print("python run_tests.py TestBasicEmbeddings                           # 运行特定测试类")
     print("python run_tests.py TestBasicEmbeddings test_embed_documents_basic # 运行特定测试方法")
     print("\n可用的测试类:")
@@ -219,6 +254,9 @@ def print_usage() -> None:
     print("- TestEmbeddingModels: 嵌入模型对比测试")
     print("- TestCachedEmbeddings: 缓存嵌入功能测试")
     print("- TestEmbeddingPerformance: 嵌入性能测试")
+    print("- TestVectorStores: 向量存储功能测试")
+    print("- TestAsyncVectorStores: 异步向量存储测试")
+    print("- TestDocumentLoaderAndSplitter: 文档加载和分割测试")
 
 
 if __name__ == '__main__':
