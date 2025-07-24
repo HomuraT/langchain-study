@@ -25,7 +25,9 @@ __author__ = "LangChain Study Project"
 
 # 导入主要的测试类
 from .test_prompt_templates import TestPromptTemplates
+from .test_example_selectors import TestExampleSelectors
 
 __all__ = [
-    "TestPromptTemplates"
+    "TestPromptTemplates",
+    "TestExampleSelectors"
 ] 

@@ -32,12 +32,14 @@ class PromptTemplateTestRunner:
         """
         self.test_modules = {
             'prompt_templates': 'unitests.test_prompt_templates.test_prompt_templates',
-            'jinja2_templates': 'unitests.test_prompt_templates.test_jinja2_templates'
+            'jinja2_templates': 'unitests.test_prompt_templates.test_jinja2_templates',
+            'example_selectors': 'unitests.test_prompt_templates.test_example_selectors'
         }
         
         self.test_descriptions = {
             'prompt_templates': '提示模板功能测试 (PromptTemplate, ChatPromptTemplate, MessagesPlaceholder)',
-            'jinja2_templates': 'Jinja2模板功能测试 (Jinja2PromptTemplate, 条件逻辑, 循环, 过滤器, 宏)'
+            'jinja2_templates': 'Jinja2模板功能测试 (Jinja2PromptTemplate, 条件逻辑, 循环, 过滤器, 宏)',
+            'example_selectors': '示例选择器功能测试 (LengthBased, SemanticSimilarity, NGram, MMR, Custom)'
         }
     
     def run_specific_tests(self, test_names: List[str], verbose: bool = True, quiet: bool = False) -> Dict[str, bool]:
