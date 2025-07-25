@@ -1,159 +1,854 @@
-# 聊天模型
+# ChatModels 指南
 
-## 概述
+ChatModels 是 LangChain 中用于与聊天模型（如 OpenAI 的 GPT 系列）进行交互的核心组件。本指南将全面介绍 ChatModels 的各种功能和使用方法。
 
-大型语言模型（LLMs）是先进的机器学习模型，在广泛的语言相关任务中表现出色，如文本生成、翻译、摘要、问答等，无需针对每种场景进行特定的任务微调。
+详细测试样例以及源码，可以访问[github](https://github.com/HomuraT/langchain-study/tree/main/unitests/test_chatmodels)
 
-现代LLMs通常通过聊天模型接口访问，该接口接受[消息](https://python.langchain.com/docs/concepts/messages/)列表作为输入并返回[消息](https://python.langchain.com/docs/concepts/messages/)作为输出。
+## 📋 目录
 
-最新一代的聊天模型提供了额外的功能：
+1. [基础概念](#基础概念)
+2. [基础聊天功能](#基础聊天功能)
+3. [异步操作](#异步操作)
+4. [流式输出](#流式输出)
+5. [多模态功能](#多模态功能)
+6. [工具调用](#工具调用)
+7. [高级功能](#高级功能)
+8. [错误处理](#错误处理)
+9. [响应元数据](#响应元数据)
 
-- **[工具调用](https://python.langchain.com/docs/concepts/tool_calling/)**：许多流行的聊天模型提供原生的[工具调用](https://python.langchain.com/docs/concepts/tool_calling/)API。该API允许开发者构建丰富的应用程序，使LLMs能够与外部服务、API和数据库交互。工具调用还可用于从非结构化数据中提取结构化信息并执行各种其他任务。
-- **[结构化输出](https://python.langchain.com/docs/concepts/structured_outputs/)**：一种使聊天模型以结构化格式（如匹配给定模式的JSON）响应的技术。
-- **[多模态性](https://python.langchain.com/docs/concepts/multimodality/)**：处理文本以外数据的能力；例如，图像、音频和视频。
+## 基础概念
 
-## 特性
+### ChatModels 是什么？
 
-LangChain为使用来自不同提供商的聊天模型提供了一致的接口，同时为监控、调试和优化使用LLMs的应用程序性能提供了额外功能。
+ChatModels 是 LangChain 的聊天模型抽象，提供了与各种大语言模型进行对话的统一接口。它支持多种功能，从简单的文本对话到复杂的多模态交互和工具调用。
 
-- 与许多聊天模型提供商的集成（例如，Anthropic、OpenAI、Ollama、Microsoft Azure、Google Vertex、Amazon Bedrock、Hugging Face、Cohere、Groq）。请查看[聊天模型集成](https://python.langchain.com/docs/integrations/chat/)以获取最新的支持模型列表。
-- 使用LangChain的[消息](https://python.langchain.com/docs/concepts/messages/)格式或OpenAI格式。
-- 标准[工具调用API](https://python.langchain.com/docs/concepts/tool_calling/)：用于将工具绑定到模型、访问模型发出的工具调用请求以及将工具结果发送回模型的标准接口。
-- 通过`with_structured_output`方法[构建输出](https://python.langchain.com/docs/concepts/structured_outputs/#structured-output-method)的标准API。
-- 提供对[异步编程](https://python.langchain.com/docs/concepts/async/)、[高效批处理](https://python.langchain.com/docs/concepts/runnables/#optimized-parallel-execution-batch)、[丰富流式API](https://python.langchain.com/docs/concepts/streaming/)的支持。
-- 与[LangSmith](https://docs.smith.langchain.com)集成，用于监控和调试基于LLMs的生产级应用程序。
-- 额外功能，如标准化[令牌使用](https://python.langchain.com/docs/concepts/messages/#aimessage)、[速率限制](#速率限制)、[缓存](#缓存)等。
+**相关链接**：
+- [LangChain Chat Models 概念](https://python.langchain.com/docs/concepts/chat_models/)
+- [如何使用聊天模型](https://python.langchain.com/docs/how_to/chat_models_universal_init/)
 
-## 集成
+### 核心组件
 
-LangChain有许多聊天模型集成，允许您使用来自不同提供商的各种模型。
+- **ChatOpenAI**: OpenAI 聊天模型的实现
+- **Messages**: 对话消息的数据结构
+- **Tools**: 外部功能调用的抽象
+- **Callbacks**: 回调处理机制
 
-这些集成有两种类型：
+## 基础聊天功能
 
-- **官方模型**：这些是LangChain和/或模型提供商官方支持的模型。您可以在`langchain-<provider>`包中找到这些模型。
-- **社区模型**：这些模型主要由社区贡献和支持。您可以在`langchain-community`包中找到这些模型。
+### 模型初始化
 
-LangChain聊天模型遵循在类名前加"Chat"前缀的命名约定（例如，`ChatOllama`、`ChatAnthropic`、`ChatOpenAI`等）。
+ChatModels 的使用从创建模型实例开始：
 
-请查看[聊天模型集成](https://python.langchain.com/docs/integrations/chat/)以获取支持模型的列表。
+```python
+from langchain_openai import ChatOpenAI
 
-> **注意**：名称中**不**包含"Chat"前缀或名称中包含"LLM"后缀的模型通常指不遵循聊天模型接口的较旧模型，而是使用接受字符串作为输入并返回字符串作为输出的接口。
+# 创建模型实例
+model = ChatOpenAI(
+    model="gpt-4o-mini",
+    base_url="http://localhost:8212",
+    api_key="your-api-key",
+    temperature=0.7,
+    max_tokens=1000,
+    timeout=30
+)
+```
 
-## 接口
+**参数说明**：
+- `model`: 使用的模型名称
+- `temperature`: 控制输出的随机性（0-2，0最确定，2最随机）
+- `max_tokens`: 最大输出token数量
+- `timeout`: 请求超时时间（秒）
 
-LangChain聊天模型实现了[BaseChatModel](https://python.langchain.com/api_reference/core/language_models/langchain_core.language_models.chat_models.BaseChatModel.html)接口。由于`BaseChatModel`也实现了[Runnable接口](https://python.langchain.com/docs/concepts/runnables/)，聊天模型支持[标准流式接口](https://python.langchain.com/docs/concepts/streaming/)、[异步编程](https://python.langchain.com/docs/concepts/async/)、优化[批处理](https://python.langchain.com/docs/concepts/runnables/#optimized-parallel-execution-batch)等。请参阅[Runnable接口](https://python.langchain.com/docs/concepts/runnables/)了解更多详细信息。
+### 消息类型
 
-聊天模型的许多关键方法以[消息](https://python.langchain.com/docs/concepts/messages/)作为输入并返回消息作为输出。
+LangChain 提供了多种消息类型来构建对话：
 
-聊天模型提供一套标准参数，可用于配置模型。这些参数通常用于控制模型的行为，如输出的温度、响应中的最大令牌数以及等待响应的最大时间。请参阅[标准参数](#标准参数)部分了解更多详细信息。
+```python
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
-> **注意**：在文档中，我们经常互换使用"LLM"和"聊天模型"这两个术语。这是因为大多数现代LLMs通过聊天模型接口向用户公开。
->
-> 但是，LangChain也有一些不遵循聊天模型接口的较旧LLMs的实现，而是使用接受字符串作为输入并返回字符串作为输出的接口。这些模型通常没有"Chat"前缀（例如，`Ollama`、`Anthropic`、`OpenAI`等）。这些模型实现[BaseLLM](https://python.langchain.com/api_reference/core/language_models/langchain_core.language_models.llms.BaseLLM.html#langchain_core.language_models.llms.BaseLLM)接口，可能以"LLM"后缀命名（例如，`OllamaLLM`、`AnthropicLLM`、`OpenAILLM`等）。通常，用户不应使用这些模型。
+# 系统消息 - 定义AI的角色和行为
+system_msg = SystemMessage(content="You are a helpful assistant.")
 
-## 关键方法
+# 人类消息 - 用户输入
+human_msg = HumanMessage(content="Hello, how are you?")
 
-聊天模型的关键方法包括：
+# AI消息 - AI的回复
+ai_msg = AIMessage(content="I'm doing well, thank you!")
+```
 
-- **invoke**：与聊天模型交互的主要方法。它接受[消息](https://python.langchain.com/docs/concepts/messages/)列表作为输入并返回消息列表作为输出。
-- **stream**：允许您在生成聊天模型输出时流式传输输出的方法。
-- **batch**：允许您将对聊天模型的多个请求批处理在一起以进行更高效处理的方法。
-- **bind_tools**：允许您将工具绑定到聊天模型以在模型的执行上下文中使用的方法。
-- **with_structured_output**：围绕`invoke`方法的包装器，用于原生支持[结构化输出](https://python.langchain.com/docs/concepts/structured_outputs/)的模型。
+### 基础对话
 
-其他重要方法可在[BaseChatModel API参考](https://python.langchain.com/api_reference/core/language_models/langchain_core.language_models.chat_models.BaseChatModel.html)中找到。
+**输入**: 消息列表
+**输出**: AIMessage 对象
+**原理**: 模型接收消息历史，生成下一个回复
 
-## 输入和输出
+```python
+# 简单对话
+response = model.invoke([HumanMessage(content="Hello!")])
+print(response.content)
 
-现代LLMs通常通过聊天模型接口访问，该接口接受[消息](https://python.langchain.com/docs/concepts/messages/)作为输入并返回[消息](https://python.langchain.com/docs/concepts/messages/)作为输出。消息通常与角色（例如，"system"、"human"、"assistant"）和一个或多个包含文本或潜在多模态数据（例如，图像、音频、视频）的内容块相关联。
+# 带系统消息的对话
+messages = [
+    SystemMessage(content="You are a math tutor."),
+    HumanMessage(content="What is 2+2?")
+]
+response = model.invoke(messages)
+print(response.content)
+```
 
-LangChain支持两种消息格式与聊天模型交互：
+### 多轮对话
 
-- **LangChain消息格式**：LangChain自己的消息格式，默认使用，由LangChain内部使用。
-- **OpenAI消息格式**：OpenAI的消息格式。
+**原理**: 通过维护消息历史来保持对话上下文
 
-## 标准参数
+```python
+# 构建对话历史
+conversation = [
+    HumanMessage(content="My name is Alice."),
+    AIMessage(content="Nice to meet you, Alice!"),
+    HumanMessage(content="What's my name?")
+]
 
-许多聊天模型具有可用于配置模型的标准化参数：
+response = model.invoke(conversation)
+print(response.content)  # 应该包含 "Alice"
+```
 
-| 参数 | 描述 |
-|------|------|
-| model | 您要使用的特定AI模型的名称或标识符（例如，"gpt-3.5-turbo"或"gpt-4"） |
-| temperature | 控制模型输出的随机性。较高的值（例如，1.0）使响应更具创造性，而较低的值（例如，0.0）使它们更具确定性和专注性 |
-| timeout | 在取消请求之前等待模型响应的最大时间（以秒为单位）。确保请求不会无限期挂起 |
-| max_tokens | 限制响应中令牌（单词和标点符号）的总数。这控制输出的长度 |
-| stop | 指定停止序列，指示模型何时应停止生成令牌。例如，您可能使用特定字符串来表示响应的结束 |
-| max_retries | 如果由于网络超时或速率限制等问题而失败，系统将尝试重新发送请求的最大次数 |
-| api_key | 与模型提供商进行身份验证所需的API密钥。这通常在您注册访问模型时发出 |
-| base_url | 发送请求的API端点的URL。这通常由模型提供商提供，对于定向您的请求是必需的 |
-| rate_limiter | 可选的[BaseRateLimiter](https://python.langchain.com/api_reference/core/rate_limiters/langchain_core.rate_limiters.BaseRateLimiter.html#langchain_core.rate_limiters.BaseRateLimiter)来间隔请求以避免超过速率限制。有关更多详细信息，请参阅[速率限制](#速率限制) |
+### 批处理
 
-需要注意的一些重要事项：
+**输入**: 消息批次列表
+**输出**: AIMessage 列表
+**原理**: 并行处理多个独立的对话请求
 
-- 标准参数仅适用于公开具有预期功能的参数的模型提供商。例如，某些提供商不公开最大输出令牌的配置，因此这些提供商不能支持`max_tokens`。
-- 标准参数目前仅在具有自己集成包的集成上强制执行（例如`langchain-openai`、`langchain-anthropic`等），它们不在`langchain-community`中的模型上强制执行。
+```python
+message_batches = [
+    [HumanMessage(content="Hello 1")],
+    [HumanMessage(content="Hello 2")],
+    [HumanMessage(content="Hello 3")]
+]
 
-聊天模型还接受特定于该集成的其他参数。要查找聊天模型支持的所有参数，请转到该模型的相应[API参考](https://python.langchain.com/api_reference/)。
+responses = model.batch(message_batches)
+for i, response in enumerate(responses):
+    print(f"Response {i+1}: {response.content}")
+```
+
+**相关链接**：
+- [如何进行聊天对话](https://python.langchain.com/docs/how_to/chatbots/)
+
+## 异步操作
+
+### 概念定义
+
+异步操作允许非阻塞式的模型调用，提高应用程序的并发性能和响应速度。
+
+### 异步调用
+
+**输入**: 消息列表
+**输出**: AIMessage 对象（异步）
+**原理**: 使用 Python asyncio 实现非阻塞调用
+
+```python
+import asyncio
+
+async def async_chat():
+    response = await model.ainvoke([HumanMessage(content="Hello async!")])
+    return response.content
+
+# 运行异步函数
+result = asyncio.run(async_chat())
+print(result)
+```
+
+### 异步流式输出
+
+**原理**: 结合异步和流式输出，实现非阻塞的实时响应
+
+```python
+async def async_stream_chat():
+    async for chunk in model.astream([HumanMessage(content="Count to 5")]):
+        print(chunk.content, end="", flush=True)
+
+asyncio.run(async_stream_chat())
+```
+
+### 并发请求处理
+
+**原理**: 利用异步并发处理多个请求，显著提升吞吐量
+
+```python
+async def concurrent_requests():
+    tasks = [
+        model.ainvoke([HumanMessage(content=f"Request {i}")])
+        for i in range(5)
+    ]
+    
+    responses = await asyncio.gather(*tasks)
+    return [r.content for r in responses]
+
+results = asyncio.run(concurrent_requests())
+```
+
+### 异步批处理
+
+```python
+async def async_batch():
+    message_batches = [
+        [HumanMessage(content=f"Batch {i}")]
+        for i in range(3)
+    ]
+    
+    responses = await model.abatch(message_batches)
+    return responses
+
+results = asyncio.run(async_batch())
+```
+
+**相关链接**：
+- [异步编程概念](https://python.langchain.com/docs/concepts/async/)
+
+## 流式输出
+
+### 概念定义
+
+流式输出允许模型逐步生成和返回响应内容，而不是等待完整响应后一次性返回，从而提供更好的用户体验。
+
+### 基础流式输出
+
+**输入**: 消息列表
+**输出**: ChatGenerationChunk 迭代器
+**原理**: 模型生成内容时实时返回部分结果
+
+```python
+# 启用流式输出
+streaming_model = ChatOpenAI(
+    model="gpt-4o-mini",
+    streaming=True
+)
+
+# 获取流式响应
+for chunk in streaming_model.stream([HumanMessage(content="Tell me a story")]):
+    print(chunk.content, end="", flush=True)
+```
+
+### 流式回调处理
+
+**原理**: 通过回调函数自定义流式输出的处理逻辑
+
+```python
+from langchain_core.callbacks import StreamingStdOutCallbackHandler
+
+class CustomCallbackHandler(StreamingStdOutCallbackHandler):
+    def on_llm_new_token(self, token: str, **kwargs) -> None:
+        print(f"Token: {token}")
+
+model_with_callback = ChatOpenAI(
+    model="gpt-4o-mini",
+    streaming=True,
+    callbacks=[CustomCallbackHandler()]
+)
+```
+
+### 流式 vs 普通输出对比
+
+```python
+# 流式输出 - 实时显示
+chunks = list(streaming_model.stream([HumanMessage(content="What is AI?")]))
+streaming_response = "".join([chunk.content for chunk in chunks])
+
+# 普通输出 - 等待完整响应
+normal_response = model.invoke([HumanMessage(content="What is AI?")])
+
+print(f"Streaming: {streaming_response}")
+print(f"Normal: {normal_response.content}")
+```
+
+**相关链接**：
+- [如何流式输出聊天模型响应](https://python.langchain.com/docs/how_to/streaming/)
+
+## 多模态功能
+
+### 概念定义
+
+多模态功能允许 ChatModels 处理文本之外的其他数据类型，如图像、PDF文档、音频等，实现真正的多模态理解和交互。
+
+### 图像处理
+
+**输入**: 包含图像数据的消息
+**输出**: 基于图像内容的文本描述
+**原理**: 模型使用视觉编码器分析图像内容
+
+```python
+# 处理 base64 编码的图像
+import base64
+
+with open("image.png", "rb") as f:
+    image_data = base64.b64encode(f.read()).decode("utf-8")
+
+message = {
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "Describe this image:"},
+        {
+            "type": "image",
+            "source_type": "base64",
+            "data": image_data,
+            "mime_type": "image/png"
+        }
+    ]
+}
+
+response = model.invoke([message])
+print(response.content)
+```
+
+```python
+# 处理 URL 图像
+message = {
+    "role": "user", 
+    "content": [
+        {"type": "text", "text": "What's in this image?"},
+        {
+            "type": "image",
+            "source_type": "url", 
+            "url": "https://example.com/image.jpg"
+        }
+    ]
+}
+
+response = model.invoke([message])
+```
+
+### PDF 文档处理
+
+**原理**: 模型解析PDF文档结构和文本内容
+
+```python
+# 处理 PDF 文档
+with open("document.pdf", "rb") as f:
+    pdf_data = base64.b64encode(f.read()).decode("utf-8")
+
+message = {
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "Summarize this PDF:"},
+        {
+            "type": "file",
+            "source_type": "base64",
+            "data": pdf_data,
+            "mime_type": "application/pdf",
+            "filename": "document.pdf"
+        }
+    ]
+}
+
+response = model.invoke([message])
+```
+
+### 多图像对比
+
+```python
+# 对比多张图像
+message = {
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "Compare these images:"},
+        {"type": "image", "source_type": "url", "url": "image1.jpg"},
+        {"type": "image", "source_type": "url", "url": "image2.jpg"}
+    ]
+}
+
+response = model.invoke([message])
+```
+
+**相关链接**：
+- [如何传递多模态数据](https://python.langchain.com/docs/how_to/multimodal_inputs/)
 
 ## 工具调用
 
-聊天模型可以调用[工具](https://python.langchain.com/docs/concepts/tools/)来执行任务，如从数据库获取数据、进行API请求或运行自定义代码。请参阅[工具调用](https://python.langchain.com/docs/concepts/tool_calling/)指南了解更多信息。
+### 概念定义
 
-## 结构化输出
+工具调用（Tool Calling）是让 AI 模型能够调用外部函数和 API 的核心功能，极大扩展了模型的能力边界。
 
-可以要求聊天模型以特定格式（例如，JSON或匹配特定模式）响应。此功能对于信息提取任务极其有用。请在[结构化输出](https://python.langchain.com/docs/concepts/structured_outputs/)指南中阅读有关该技术的更多信息。
+### 工具定义
 
-## 多模态性
+**原理**: 使用装饰器定义工具，LangChain 自动生成工具描述供模型使用
 
-大型语言模型（LLMs）不仅限于处理文本。它们还可以用于处理其他类型的数据，如图像、音频和视频。这被称为[多模态性](https://python.langchain.com/docs/concepts/multimodality/)。
+```python
+from langchain_core.tools import tool
 
-目前，只有一些LLMs支持多模态输入，几乎没有支持多模态输出。请查阅特定模型文档了解详细信息。
+@tool
+def add_numbers(a: int, b: int) -> int:
+    """Add two numbers together.
+    
+    Args:
+        a: First number
+        b: Second number
+        
+    Returns:
+        Sum of the two numbers
+    """
+    return a + b
 
-## 上下文窗口
+@tool
+def get_weather(location: str) -> dict:
+    """Get weather information for a location.
+    
+    Args:
+        location: City name
+        
+    Returns:
+        Weather data dictionary
+    """
+    return {
+        "location": location,
+        "temperature": 22,
+        "description": "sunny"
+    }
+```
 
-聊天模型的上下文窗口是指模型一次可以处理的输入序列的最大大小。虽然现代LLMs的上下文窗口相当大，但它们仍然存在开发人员在使用聊天模型时必须牢记的限制。
+### 工具绑定和调用
 
-如果输入超过上下文窗口，模型可能无法处理整个输入并可能引发错误。在对话应用程序中，这特别重要，因为上下文窗口决定了模型在整个对话中可以"记住"多少信息。开发人员通常需要在上下文窗口内管理输入，以维持连贯的对话而不超过限制。有关在对话中处理内存的更多详细信息，请参阅[内存](https://langchain-ai.github.io/langgraph/concepts/memory/)。
+**输入**: 绑定工具的模型和消息
+**输出**: 包含工具调用的 AIMessage
+**原理**: 模型识别需要使用工具的场景，生成工具调用指令
 
-输入的大小以[令牌](https://python.langchain.com/docs/concepts/tokens/)为单位测量，令牌是模型使用的处理单元。
+```python
+# 绑定工具到模型
+model_with_tools = model.bind_tools([add_numbers, get_weather])
 
-## 高级主题
+# 请求计算
+response = model_with_tools.invoke([
+    HumanMessage(content="What is 15 + 27?")
+])
 
-### 速率限制
+# 检查工具调用
+if response.tool_calls:
+    for tool_call in response.tool_calls:
+        print(f"Tool: {tool_call['name']}")
+        print(f"Args: {tool_call['args']}")
+```
 
-许多聊天模型提供商对在给定时间段内可以发出的请求数量施加限制。
+### 完整工具调用流程
 
-如果您遇到速率限制，您通常会从提供商收到速率限制错误响应，并需要等待后再发出更多请求。
+**原理**: 完整的工具调用包括：请求→工具调用→执行→结果返回→最终回答
 
-您有几个选项来处理速率限制：
+```python
+from langchain_core.messages import ToolMessage
 
-- **通过间隔请求尝试避免遇到速率限制**：聊天模型接受可在初始化期间提供的`rate_limiter`参数。此参数用于控制向模型提供商发出请求的速率。间隔对给定模型的请求是在基准测试模型以评估其性能时特别有用的策略。请参阅[如何处理速率限制](https://python.langchain.com/docs/how_to/chat_model_rate_limiting/)以获取有关如何使用此功能的更多信息。
-- **尝试从速率限制错误中恢复**：如果您收到速率限制错误，您可以在重试请求之前等待一定时间。每次后续速率限制错误可以增加等待时间。聊天模型有一个`max_retries`参数，可用于控制重试次数。有关更多信息，请参阅[标准参数](#标准参数)部分。
-- **回退到另一个聊天模型**：如果您在一个聊天模型上遇到速率限制，您可以切换到另一个没有速率限制的聊天模型。
+def complete_tool_calling(query: str):
+    # 1. 发送查询
+    messages = [HumanMessage(content=query)]
+    
+    # 2. 模型决定调用工具
+    ai_response = model_with_tools.invoke(messages)
+    messages.append(ai_response)
+    
+    # 3. 执行工具调用
+    for tool_call in ai_response.tool_calls:
+        if tool_call["name"] == "add_numbers":
+            result = add_numbers.invoke(tool_call)
+        elif tool_call["name"] == "get_weather":
+            result = get_weather.invoke(tool_call)
+        
+        # 4. 添加工具结果
+        tool_message = ToolMessage(
+            content=str(result.content),
+            tool_call_id=tool_call["id"],
+            name=tool_call["name"]
+        )
+        messages.append(tool_message)
+    
+    # 5. 获取最终回答
+    final_response = model_with_tools.invoke(messages)
+    return final_response.content
 
-### 缓存
+# 使用示例
+result = complete_tool_calling("Add 15 and 27, then tell me the weather in Beijing")
+```
 
-聊天模型API可能很慢，因此一个自然的问题是是否缓存先前对话的结果。理论上，缓存可以通过减少向模型提供商发出的请求数量来帮助提高性能。实际上，缓存聊天模型响应是一个复杂的问题，应谨慎处理。
+### 并行工具调用
 
-原因是，如果依靠缓存模型的确切输入，在对话中第一次或第二次交互后获得缓存命中的可能性很小。例如，您认为多个对话以完全相同的消息开始的可能性有多大？完全相同的三条消息呢？
+**原理**: 模型可以同时调用多个工具提高效率
 
-一种替代方法是使用语义缓存，您根据输入的含义而不是确切的输入本身来缓存响应。这在某些情况下可能有效，但在其他情况下则不然。
+```python
+response = model_with_tools.invoke([
+    HumanMessage(content="Calculate 5+3 and get weather for Tokyo")
+])
 
-语义缓存在应用程序的关键路径上引入了对另一个模型的依赖（例如，语义缓存可能依靠[嵌入模型](https://python.langchain.com/docs/concepts/embedding_models/)将文本转换为向量表示），并且不能保证准确捕获输入的含义。
+# 可能同时调用 add_numbers 和 get_weather
+for tool_call in response.tool_calls:
+    print(f"Parallel tool call: {tool_call['name']}")
+```
 
-但是，可能存在缓存聊天模型响应有益的情况。例如，如果您有一个用于回答常见问题的聊天模型，缓存响应可以帮助减少模型提供商的负载、成本并改善响应时间。
+### 复杂工具示例
 
-请参阅[如何缓存聊天模型响应](https://python.langchain.com/docs/how_to/chat_model_caching/)指南了解更多详细信息。
+```python
+@tool
+def search_database(query: str, table: str) -> list:
+    """Search database for information.
+    
+    Args:
+        query: Search query
+        table: Database table name
+        
+    Returns:
+        List of matching records
+    """
+    # 模拟数据库搜索
+    return [{"id": 1, "name": "Result 1"}]
 
-## 相关资源
+@tool  
+def send_email(recipient: str, subject: str, body: str) -> bool:
+    """Send an email.
+    
+    Args:
+        recipient: Email recipient
+        subject: Email subject
+        body: Email body
+        
+    Returns:
+        Success status
+    """
+    print(f"Email sent to {recipient}")
+    return True
+```
 
-- 使用聊天模型的操作指南：[操作指南](https://python.langchain.com/docs/how_to/#chat-models)
-- 支持的聊天模型列表：[聊天模型集成](https://python.langchain.com/docs/integrations/chat/)
+**相关链接**：
+- [如何进行工具/函数调用](https://python.langchain.com/docs/how_to/tool_calling/)
+- [如何创建工具](https://python.langchain.com/docs/how_to/custom_tools/)
 
-### 概念指南
+## 高级功能
 
-- [消息](https://python.langchain.com/docs/concepts/messages/)
-- [工具调用](https://python.langchain.com/docs/concepts/tool_calling/)
-- [多模态性](https://python.langchain.com/docs/concepts/multimodality/)
-- [结构化输出](https://python.langchain.com/docs/concepts/structured_outputs/)
-- [令牌](https://python.langchain.com/docs/concepts/tokens/)
+### 结构化输出
+
+**概念**: 让模型返回符合特定数据结构的格式化响应
+**原理**: 使用 Pydantic 模型约束输出格式
+
+```python
+from pydantic import BaseModel, Field
+
+class WeatherInfo(BaseModel):
+    """天气信息结构"""
+    location: str = Field(description="地点名称")
+    temperature: float = Field(description="温度")
+    humidity: int = Field(description="湿度百分比")
+    description: str = Field(description="天气描述")
+
+# 创建结构化输出模型
+structured_model = model.with_structured_output(WeatherInfo)
+
+# 获取结构化响应
+weather = structured_model.invoke([
+    HumanMessage(content="Tell me about the weather in Beijing")
+])
+
+print(f"Location: {weather.location}")
+print(f"Temperature: {weather.temperature}°C")
+```
+
+### 复杂结构化输出
+
+```python
+class Person(BaseModel):
+    name: str = Field(description="人员姓名")
+    age: int = Field(description="人员年龄")
+    skills: list[str] = Field(description="技能列表")
+
+class Team(BaseModel):
+    team_name: str = Field(description="团队名称")
+    members: list[Person] = Field(description="团队成员")
+    project: str = Field(description="项目名称")
+
+team_model = model.with_structured_output(Team)
+result = team_model.invoke([
+    HumanMessage(content="Create a 3-person development team for a web project")
+])
+
+print(f"Team: {result.team_name}")
+for member in result.members:
+    print(f"- {member.name}, {member.age}, Skills: {member.skills}")
+```
+
+### Pydantic 工具解析器
+
+```python
+from langchain_core.output_parsers import PydanticToolsParser
+
+@tool
+def calculate_area(length: float, width: float) -> dict:
+    """Calculate rectangle area."""
+    return {"area": length * width}
+
+tools = [calculate_area]
+parser = PydanticToolsParser(tools=tools)
+
+model_with_parser = model.bind_tools(tools) | parser
+```
+
+### 上下文管理
+
+**原理**: 智能管理长对话的上下文信息，避免超出模型限制
+
+```python
+def manage_long_conversation(messages: list, max_tokens: int = 4000):
+    """管理长对话上下文"""
+    # 估算token数量（简化计算）
+    total_tokens = sum(len(msg.content.split()) for msg in messages)
+    
+    if total_tokens > max_tokens:
+        # 保留系统消息和最近的对话
+        system_msgs = [msg for msg in messages if isinstance(msg, SystemMessage)]
+        recent_msgs = messages[-10:]  # 保留最近10条消息
+        messages = system_msgs + recent_msgs
+    
+    return model.invoke(messages)
+```
+
+**相关链接**：
+- [如何返回结构化数据](https://python.langchain.com/docs/how_to/structured_output/)
+
+## 错误处理
+
+### 网络连接错误
+
+**原理**: 处理网络不稳定、服务器不可达等连接问题
+
+```python
+import requests
+from openai import APIConnectionError
+
+def robust_invoke(messages, max_retries=3):
+    """带重试机制的模型调用"""
+    for attempt in range(max_retries):
+        try:
+            return model.invoke(messages)
+        except APIConnectionError as e:
+            if attempt == max_retries - 1:
+                raise e
+            print(f"Connection failed, retrying... ({attempt + 1}/{max_retries})")
+            time.sleep(2 ** attempt)  # 指数退避
+```
+
+### API 错误处理
+
+```python
+from openai import AuthenticationError, RateLimitError, BadRequestError
+
+def handle_api_errors(messages):
+    """处理各种API错误"""
+    try:
+        return model.invoke(messages)
+    except AuthenticationError:
+        print("API密钥无效，请检查配置")
+    except RateLimitError:
+        print("达到速率限制，请稍后重试")
+    except BadRequestError as e:
+        print(f"请求参数错误: {e}")
+    except Exception as e:
+        print(f"未知错误: {e}")
+```
+
+### 超时处理
+
+```python
+# 配置超时参数
+timeout_model = ChatOpenAI(
+    model="gpt-4o-mini",
+    timeout=30,  # 30秒超时
+    max_retries=3
+)
+
+try:
+    response = timeout_model.invoke(messages)
+except TimeoutError:
+    print("请求超时，请检查网络连接")
+```
+
+### 内容长度限制
+
+```python
+def check_context_length(messages, max_tokens=8000):
+    """检查上下文长度是否超限"""
+    # 简化的token计算
+    total_tokens = sum(len(msg.content.split()) * 1.3 for msg in messages)
+    
+    if total_tokens > max_tokens:
+        raise ValueError(f"Context too long: {total_tokens} > {max_tokens}")
+    
+    return model.invoke(messages)
+```
+
+**相关链接**：
+- [如何处理速率限制](https://python.langchain.com/docs/how_to/rate_limits/)
+
+## 响应元数据
+
+### 概念定义
+
+响应元数据包含了模型调用的详细信息，如token使用量、完成状态、模型版本等，对于监控、调试和成本控制非常重要。
+
+### 访问元数据
+
+**原理**: 每个 AIMessage 都包含 response_metadata 属性
+
+```python
+response = model.invoke([HumanMessage(content="Hello")])
+
+# 访问元数据
+metadata = response.response_metadata
+print(f"Model: {metadata.get('model_name')}")
+print(f"Finish reason: {metadata.get('finish_reason')}")
+
+# Token使用信息
+if 'token_usage' in metadata:
+    usage = metadata['token_usage']
+    print(f"Prompt tokens: {usage.get('prompt_tokens')}")
+    print(f"Completion tokens: {usage.get('completion_tokens')}")
+    print(f"Total tokens: {usage.get('total_tokens')}")
+```
+
+### 成本监控
+
+```python
+def calculate_cost(response):
+    """计算API调用成本"""
+    metadata = response.response_metadata
+    token_usage = metadata.get('token_usage', {})
+    
+    # OpenAI pricing (示例价格)
+    prompt_cost = token_usage.get('prompt_tokens', 0) * 0.00015 / 1000
+    completion_cost = token_usage.get('completion_tokens', 0) * 0.0006 / 1000
+    
+    return {
+        'prompt_cost': prompt_cost,
+        'completion_cost': completion_cost,
+        'total_cost': prompt_cost + completion_cost,
+        'total_tokens': token_usage.get('total_tokens', 0)
+    }
+
+response = model.invoke([HumanMessage(content="Explain quantum computing")])
+cost_info = calculate_cost(response)
+print(f"Total cost: ${cost_info['total_cost']:.6f}")
+```
+
+### 性能监控
+
+```python
+import time
+
+def monitor_performance(messages):
+    """监控模型性能"""
+    start_time = time.time()
+    response = model.invoke(messages)
+    end_time = time.time()
+    
+    response_time = end_time - start_time
+    metadata = response.response_metadata
+    token_usage = metadata.get('token_usage', {})
+    
+    return {
+        'response_time': response_time,
+        'tokens_per_second': token_usage.get('completion_tokens', 0) / response_time,
+        'finish_reason': metadata.get('finish_reason'),
+        'model': metadata.get('model_name')
+    }
+
+perf_data = monitor_performance([HumanMessage(content="Write a short story")])
+print(f"Response time: {perf_data['response_time']:.2f}s")
+print(f"Tokens/sec: {perf_data['tokens_per_second']:.1f}")
+```
+
+**相关链接**：
+- [响应元数据概念](https://python.langchain.com/docs/how_to/response_metadata/)
+
+## 消息格式转换
+
+### LangChain 到 OpenAI 格式转换
+
+**概念**: 将 LangChain 消息格式转换为 OpenAI API 兼容格式
+**用途**: 与其他 OpenAI 兼容服务集成、日志记录、调试分析
+
+```python
+from langchain_core.messages import convert_to_openai_messages
+
+# LangChain 消息
+messages = [
+    SystemMessage("You are a helpful assistant."),
+    HumanMessage("Hello!"),
+    AIMessage("Hi there!")
+]
+
+# 转换为 OpenAI 格式
+openai_messages = convert_to_openai_messages(messages)
+print(openai_messages)
+# 输出:
+# [
+#   {'role': 'system', 'content': 'You are a helpful assistant.'},
+#   {'role': 'user', 'content': 'Hello!'},
+#   {'role': 'assistant', 'content': 'Hi there!'}
+# ]
+```
+
+### 工具调用格式转换
+
+```python
+# 包含工具调用的消息
+tool_messages = [
+    HumanMessage("Calculate 15 + 27"),
+    AIMessage("", tool_calls=[{
+        "name": "add_numbers",
+        "args": {"a": 15, "b": 27},
+        "id": "call_123"
+    }]),
+    ToolMessage("42", tool_call_id="call_123", name="add_numbers")
+]
+
+openai_format = convert_to_openai_messages(tool_messages)
+```
+
+## 其他
+
+### 模型配置
+
+```python
+# 生产环境推荐配置
+production_model = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0.7,           # 平衡创造性和确定性
+    max_tokens=1000,           # 控制响应长度
+    timeout=60,                # 合理的超时时间
+    max_retries=3,             # 自动重试
+    streaming=True             # 提升用户体验
+)
+```
+
+### 多模态
+
+```python
+def process_multimodal_safely(text, image_data=None):
+    """安全处理多模态输入"""
+    content = [{"type": "text", "text": text}]
+    
+    if image_data:
+        # 检查图像大小
+        if len(image_data) > 20 * 1024 * 1024:  # 20MB limit
+            raise ValueError("Image too large")
+        
+        content.append({
+            "type": "image",
+            "source_type": "base64", 
+            "data": image_data,
+            "mime_type": "image/jpeg"
+        })
+    
+    return model.invoke([{"role": "user", "content": content}])
+```
+
+## 相关链接
+
+- [LangChain 官方文档](https://python.langchain.com/docs/)
+- [Chat Models 概念指南](https://python.langchain.com/docs/concepts/chat_models/)
+- [How-to 指南总览](https://python.langchain.com/docs/how_to/)
+- [工具调用指南](https://python.langchain.com/docs/how_to/tool_calling/)
+- [多模态输入指南](https://python.langchain.com/docs/how_to/multimodal_inputs/)
+- [流式输出指南](https://python.langchain.com/docs/how_to/streaming/)
+- [异步编程指南](https://python.langchain.com/docs/concepts/async/)
+- [结构化输出指南](https://python.langchain.com/docs/how_to/structured_output/)
