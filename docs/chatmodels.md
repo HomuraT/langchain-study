@@ -15,6 +15,7 @@ ChatModels 是 LangChain 中用于与聊天模型（如 OpenAI 的 GPT 系列）
 7. [高级功能](#高级功能)
 8. [错误处理](#错误处理)
 9. [响应元数据](#响应元数据)
+10. [Token 使用追踪](#token-使用追踪)
 
 ## 基础概念
 
@@ -758,6 +759,302 @@ print(f"Tokens/sec: {perf_data['tokens_per_second']:.1f}")
 
 **相关链接**：
 - [响应元数据概念](https://python.langchain.com/docs/how_to/response_metadata/)
+
+## Token 使用追踪
+
+### 概念定义
+
+Token 使用追踪是监控和分析大语言模型调用成本的核心功能。通过精确跟踪每次调用的输入和输出 token 数量，可以实现成本控制、性能优化和用量分析。
+
+### Context Manager 追踪（推荐）
+
+**功能**: 使用 `with` 语法自动追踪整个代码块中的所有 token 使用
+**输入**: 需要追踪的代码块
+**输出**: 聚合的 token 使用统计信息
+**原理**: 通过回调机制自动收集所有模型调用的 token 使用数据
+
+```python
+from langchain_core.callbacks import get_usage_metadata_callback
+
+# 使用 context manager 自动追踪
+with get_usage_metadata_callback() as cb:
+    # 执行多个 LLM 调用
+    response1 = model.invoke([HumanMessage(content="Hello")])
+    response2 = model.invoke([HumanMessage(content="How are you?")])
+    response3 = model.invoke([HumanMessage(content="Goodbye")])
+    
+    # 获取聚合的 token 使用情况
+    total_usage = cb.usage_metadata
+
+# 分析 token 使用
+for model_name, usage_data in total_usage.items():
+    print(f"模型: {model_name}")
+    print(f"  输入tokens: {usage_data['input_tokens']}")
+    print(f"  输出tokens: {usage_data['output_tokens']}")
+    print(f"  总计: {usage_data['total_tokens']}")
+    
+    # 详细信息（如果可用）
+    if 'input_token_details' in usage_data:
+        print(f"  输入详情: {usage_data['input_token_details']}")
+    if 'output_token_details' in usage_data:
+        print(f"  输出详情: {usage_data['output_token_details']}")
+```
+
+### 复杂管道的 Token 追踪
+
+**场景**: 多步骤处理流程的完整 token 监控
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_schema.runnable import RunnablePassthrough
+
+# 构建多步骤管道
+topic_expander = ChatPromptTemplate.from_template(
+    "给定主题：{topic}\n请扩展成一个详细的大纲，包含3-5个主要部分。"
+)
+
+content_generator = ChatPromptTemplate.from_template(
+    "基于以下大纲，写一篇结构完整的文章：\n{step1_outline}\n\n"
+    "要求：\n1. 每个部分都要有具体内容\n2. 语言流畅自然\n3. 逻辑清晰"
+)
+
+content_optimizer = ChatPromptTemplate.from_template(
+    "请优化以下文章，使其更加生动有趣：\n{step2_content}\n\n"
+    "优化要求：\n1. 增加具体例子\n2. 使用更生动的描述\n3. 保持原有结构"
+)
+
+# 使用 context manager 追踪整个管道的 token 使用
+with get_usage_metadata_callback() as cb:
+    # 构建管道
+    pipeline = (
+        RunnablePassthrough.assign(
+            step1_outline=topic_expander | model | StrOutputParser()
+        )
+        | RunnablePassthrough.assign(
+            step2_content=content_generator | model | StrOutputParser()
+        )
+        | RunnablePassthrough.assign(
+            step3_optimized=content_optimizer | model | StrOutputParser()
+        )
+    )
+    
+    # 执行管道，所有 token 使用都会被自动追踪
+    results = pipeline.invoke({"topic": "人工智能在教育中的应用"})
+    
+    # 获取总的 token 使用情况
+    total_usage = cb.usage_metadata
+
+# 显示详细统计
+print("\n📊 Token使用统计:")
+total_input = 0
+total_output = 0
+total_all = 0
+
+for model_name, usage_data in total_usage.items():
+    input_tokens = usage_data.get('input_tokens', 0)
+    output_tokens = usage_data.get('output_tokens', 0)
+    total_tokens = usage_data.get('total_tokens', 0)
+    
+    print(f"\n模型: {model_name}")
+    print(f"  输入tokens: {input_tokens}")
+    print(f"  输出tokens: {output_tokens}")
+    print(f"  总tokens: {total_tokens}")
+    
+    total_input += input_tokens
+    total_output += output_tokens  
+    total_all += total_tokens
+
+print(f"\n🎯 整个管道汇总:")
+print(f"  总输入tokens: {total_input}")
+print(f"  总输出tokens: {total_output}")
+print(f"  总计tokens: {total_all}")
+```
+
+### 分步实时追踪
+
+**功能**: 对每个步骤进行独立的 token 追踪和分析
+**适用场景**: 性能调优、成本热点识别、详细分析
+
+```python
+# 分别执行每个步骤并实时追踪
+step_results = {}
+step_tokens = {}
+test_topic = "人工智能在教育中的应用"
+
+# 步骤1：生成大纲
+print("\n🚀 步骤1: 生成主题大纲...")
+with get_usage_metadata_callback() as cb1:
+    outline = (topic_expander | model | StrOutputParser()).invoke({"topic": test_topic})
+    step_results["step1_outline"] = outline
+    step_tokens["step1"] = dict(cb1.usage_metadata)
+    
+    print(f"✅ 大纲生成完成 ({len(outline.split())} 词)")
+    if cb1.usage_metadata:
+        for model_name, usage in cb1.usage_metadata.items():
+            print(f"   Token使用 - 输入: {usage.get('input_tokens', 0)}, "
+                  f"输出: {usage.get('output_tokens', 0)}, "
+                  f"总计: {usage.get('total_tokens', 0)}")
+
+# 步骤2：生成内容
+print("\n🚀 步骤2: 基于大纲生成文章内容...")
+with get_usage_metadata_callback() as cb2:
+    content = (content_generator | model | StrOutputParser()).invoke({"outline": outline})
+    step_results["step2_content"] = content
+    step_tokens["step2"] = dict(cb2.usage_metadata)
+    
+    print(f"✅ 文章内容生成完成 ({len(content.split())} 词)")
+    if cb2.usage_metadata:
+        for model_name, usage in cb2.usage_metadata.items():
+            print(f"   Token使用 - 输入: {usage.get('input_tokens', 0)}, "
+                  f"输出: {usage.get('output_tokens', 0)}, "
+                  f"总计: {usage.get('total_tokens', 0)}")
+
+# 步骤3：优化内容
+print("\n🚀 步骤3: 优化文章内容...")
+with get_usage_metadata_callback() as cb3:
+    optimized_content = (content_optimizer | model | StrOutputParser()).invoke({"content": content})
+    step_results["step3_optimized"] = optimized_content
+    step_tokens["step3"] = dict(cb3.usage_metadata)
+    
+    print(f"✅ 内容优化完成 ({len(optimized_content.split())} 词)")
+    if cb3.usage_metadata:
+        for model_name, usage in cb3.usage_metadata.items():
+            print(f"   Token使用 - 输入: {usage.get('input_tokens', 0)}, "
+                  f"输出: {usage.get('output_tokens', 0)}, "
+                  f"总计: {usage.get('total_tokens', 0)}")
+```
+
+### 自定义 Token 追踪函数
+
+**功能**: 将 token 追踪逻辑嵌入到处理流程中
+**适用场景**: 复杂管道、结果包含 token 信息
+
+```python
+from langchain_core.callbacks import UsageMetadataCallbackHandler
+
+def track_step_tokens(step_name: str, step_callback: UsageMetadataCallbackHandler):
+    """自定义token追踪函数
+    
+    Args:
+        step_name: 步骤名称，用于标识不同的处理步骤
+        step_callback: 用于收集token使用数据的回调处理器
+        
+    Returns:
+        包装后的处理函数，会自动追踪token使用
+    """
+    def wrapper(x):
+        # 根据步骤名称执行对应的链
+        if step_name == "outline":
+            chain = topic_expander | model | StrOutputParser()
+        elif step_name == "content":
+            chain = content_generator | model | StrOutputParser()
+        elif step_name == "optimized":
+            chain = content_optimizer | model | StrOutputParser()
+        
+        # 使用独立的callback追踪这一步
+        result = chain.invoke(x, config={"callbacks": [step_callback]})
+        
+        # 打印这一步的token使用情况
+        print(f"\n🔍 步骤 [{step_name}] Token使用情况:")
+        if step_callback.usage_metadata:
+            for model_name, usage in step_callback.usage_metadata.items():
+                print(f"  模型: {model_name}")
+                print(f"  输入tokens: {usage.get('input_tokens', 0)}")
+                print(f"  输出tokens: {usage.get('output_tokens', 0)}")
+                print(f"  总tokens: {usage.get('total_tokens', 0)}")
+        
+        return result
+    
+    return wrapper
+
+# 使用自定义追踪函数
+from langchain_schema.runnable import RunnableLambda
+
+step1_callback = UsageMetadataCallbackHandler()
+step2_callback = UsageMetadataCallbackHandler()  
+step3_callback = UsageMetadataCallbackHandler()
+
+# 构建包含token追踪的管道
+detailed_pipeline = (
+    RunnablePassthrough.assign(
+        step1_outline=RunnableLambda(track_step_tokens("outline", step1_callback))
+    )
+    | RunnablePassthrough.assign(
+        step2_content=RunnableLambda(track_step_tokens("content", step2_callback))
+    )
+    | RunnablePassthrough.assign(
+        step3_optimized=RunnableLambda(track_step_tokens("optimized", step3_callback))
+    )
+    | RunnablePassthrough.assign(
+        # 将token使用信息添加到结果中
+        token_usage=RunnableLambda(lambda x: {
+            "step1_outline": dict(step1_callback.usage_metadata),
+            "step2_content": dict(step2_callback.usage_metadata),
+            "step3_optimized": dict(step3_callback.usage_metadata)
+        })
+    )
+)
+```
+
+### Token 追踪方法对比
+
+| 方法 | 适用场景 | 优点 | 缺点 | 推荐度 |
+|------|----------|------|------|--------|
+| **Context Manager** | 日常监控、生产环境 | 简洁、自动聚合、性能好 | 缺少分步详情 | ⭐⭐⭐⭐⭐ |
+| **分步实时追踪** | 性能调优、调试分析 | 详细分析、实时反馈 | 代码较多、开销稍大 | ⭐⭐⭐⭐ |
+| **自定义追踪函数** | 复杂管道、特殊需求 | 高度自定义、结果包含token信息 | 实现复杂、维护成本高 | ⭐⭐⭐ |
+
+### 成本分析和优化
+
+**Token 使用效率分析**:
+
+```python
+def analyze_token_efficiency(total_usage: dict) -> dict:
+    """分析token使用效率
+    
+    Args:
+        total_usage: get_usage_metadata_callback返回的使用数据
+        
+    Returns:
+        包含效率指标的分析结果
+    """
+    analysis = {}
+    
+    for model_name, usage_data in total_usage.items():
+        input_tokens = usage_data.get('input_tokens', 0)
+        output_tokens = usage_data.get('output_tokens', 0)
+        total_tokens = usage_data.get('total_tokens', 0)
+        
+        # 计算效率指标
+        if input_tokens > 0:
+            efficiency_ratio = output_tokens / input_tokens
+            cost_per_output = input_tokens * 0.15 + output_tokens * 0.60  # gpt-4o-mini价格
+            
+            analysis[model_name] = {
+                'efficiency_ratio': efficiency_ratio,  # 输出/输入比率
+                'cost_estimate_usd': cost_per_output / 1_000_000,  # 预估成本
+                'tokens_per_dollar': total_tokens / (cost_per_output / 1_000_000) if cost_per_output > 0 else 0
+            }
+    
+    return analysis
+
+# 使用示例
+with get_usage_metadata_callback() as cb:
+    response = model.invoke([HumanMessage(content="写一篇关于AI的短文")])
+    usage = cb.usage_metadata
+
+efficiency = analyze_token_efficiency(usage)
+for model_name, metrics in efficiency.items():
+    print(f"\n模型: {model_name}")
+    print(f"  效率比率: {metrics['efficiency_ratio']:.2f}")
+    print(f"  预估成本: ${metrics['cost_estimate_usd']:.6f}")
+    print(f"  性价比: {metrics['tokens_per_dollar']:.0f} tokens/美元")
+```
+
+**相关链接**：
+- [实际测试用例](https://github.com/HomuraT/langchain-study/tree/main/unitests/test_lcel/test_chatopenai_applications.py)
+- [回调机制文档](https://python.langchain.com/docs/concepts/callbacks/)
 
 ## 消息格式转换
 
